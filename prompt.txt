@@ -1,0 +1,34 @@
+Build a small first-person browser game called The Last Aperture. Let the player walk through a quiet submerged observatory, restore its telescope with one switch, and watch a deep-ocean panorama appear through the dome.
+
+PRIORITIES
+1. A memorable reveal and a coherent underwater atmosphere.
+2. Smooth movement and clear interaction.
+3. A small, self-contained build.
+
+CONSTRAINTS
+- Use raw WebGPU and procedural geometry, materials, and effects. Ship a single self-contained index.html with zero dependencies or external assets.
+- Keep the scope to one room, one switch, and one ending. Omit combat, enemies, inventory, and time limits.
+- Preallocate frame data and reuse GPU buffers.
+
+TARGET
+- Apple M1 Pro, Microsoft Edge, 1920×1080 output at 60 Hz. Lower internal resolution first if needed.
+- Over a scripted 60-second playthrough, aim for an average GPU frame time of 16.7 ms or less and a worst GPU frame of 25 ms or less.
+
+SCENE
+- Build a circular observatory with a shallow glass dome, a central brass telescope, and a single control pedestal.
+- Use deep indigo water, muted teal light, and a small amber glow on the switch to draw the player across the room.
+- Keep the exterior dim at first. Fine drifting particles and dark rock silhouettes suggest depth beyond the glass.
+- Make the view from behind the telescope the hero frame. On activation, rotate the telescope toward the dome and sweep a slow ribbon of blue-green light across the rocks. Let the view linger after the reveal.
+
+CONTROLS
+- Use WASD to walk, the mouse to look, E to activate the switch, Esc to pause, and R to restart.
+- Show a small interaction cue only when the player can reach the switch. A soft synthesized chime confirms activation.
+- The reveal completes the goal. Keep the player free to look around. A first run should take about one minute.
+
+VERIFICATION
+- Capture six GPU-rendered views in Edge: start, pedestal, inactive dome, telescope close-up, mid-reveal, and final vista. Give a fresh Codex session only the images and a short recording. Fix visible defects above minor severity.
+- Measure the scripted run and report average, 99th-percentile, and maximum frame time. Use GPU timestamp queries where supported.
+- Verify that a first-time player can find and activate the switch, that the reveal only fires once per run, and that restarting restores the initial state.
+
+DONE WHEN
+Deliver index.html, its size, and brief visual, performance, and playtest results.

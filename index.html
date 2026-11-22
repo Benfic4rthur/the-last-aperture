@@ -1,0 +1,1397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#060e1d">
+<title>The Last Aperture</title>
+<style>
+:root{color-scheme:dark;--ice:#e2f7f2;--muted:#a0bbb9;--mint:#6ee5cc;--amber:#ffd189;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:#060e1d;color:var(--ice);font-family:system-ui,sans-serif;overflow:hidden}
+[hidden]{display:none!important}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#shade{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 53% 47%,transparent 45%,#02081346 83%,#020611ba 100%),linear-gradient(180deg,#030a1360,transparent 21%,transparent 68%,#030810aa)}
+.hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 1px 8px #02070f;font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase}
+.mast,.depth,.objective,.keys{position:absolute}
+.mast,.depth{top:clamp(19px,4vw,44px)}
+.mast{left:clamp(20px,4vw,58px);display:flex;gap:11px;align-items:center;color:var(--muted)}
+.depth{right:clamp(20px,4vw,58px);color:var(--muted);text-align:right}
+.depth b{color:var(--ice);font-weight:500;display:block;font-size:14px;letter-spacing:.07em;margin-top:4px}
+.mark{width:26px;height:26px;border:1px solid #8ae8ce8a;border-radius:50%;display:inline-grid;place-items:center}
+.mark:before{content:"";width:12px;height:12px;border:1px solid #8ae8ce8a;transform:rotate(45deg);border-radius:50% 50% 2px 50%;box-shadow:0 0 10px #84ffda30}
+.objective,.keys{bottom:clamp(22px,4vw,48px)}
+.objective{left:clamp(20px,4vw,58px);border-left:1px solid var(--amber);padding-left:12px;color:var(--amber);line-height:1.35}
+.objective.live{color:var(--mint);border-color:var(--mint)}
+.objective b{display:block;margin-top:5px;color:var(--ice);font:13px system-ui,sans-serif;letter-spacing:.01em;text-transform:none}
+.keys{right:clamp(20px,4vw,58px);color:var(--muted);letter-spacing:.06em;text-transform:none}
+#reticle{position:absolute;left:50%;top:50%;width:4px;height:4px;border:1px solid #e5fff5b8;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 7px #031321}
+#cue{position:absolute;top:calc(50% + 30px);left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;white-space:nowrap;background:#08131ce8;color:var(--amber);padding:8px 13px;border:1px solid #bb965387}
+kbd{display:inline-grid;place-items:center;min-width:23px;padding:1px 5px;min-height:22px;border:1px solid currentColor;font:inherit}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;padding:7vw;background:linear-gradient(90deg,#030913ee,#030913b7 33%,#03091322 67%,transparent);z-index:2}
+.panel{position:relative;width:min(620px,100%);padding-bottom:4vh}
+.eyebrow{display:flex;gap:13px;align-items:center;color:var(--mint);font:11px var(--mono);letter-spacing:.19em;text-transform:uppercase}
+.eyebrow:before{content:"";width:31px;height:1px;background:currentColor}
+h1{margin:18px 0 16px;font:400 clamp(48px,7vw,112px)/.9 Georgia,serif;letter-spacing:-.061em;text-wrap:balance}
+.panel p{color:#bbcfce;font-size:15px;line-height:1.6;max-width:33ch;margin:0 0 25px}
+button{border:1px solid #a0efd7;color:#dffbf1;background:#0e322f;cursor:pointer;min-height:46px;padding:0 18px;font:11px var(--mono);letter-spacing:.11em;text-transform:uppercase}
+button:hover,button:focus-visible{background:#1c5048;outline:1px solid var(--mint);outline-offset:3px}
+button span{margin-left:18px;color:var(--mint)}
+button:disabled{cursor:wait;opacity:.55}
+#help{margin-top:21px;color:#9db7b7;font:10px/1.65 var(--mono);letter-spacing:.06em}
+#ending{position:absolute;left:50%;bottom:13%;width:90%;transform:translateX(-50%);text-align:center;opacity:0;transition:opacity 1.8s;text-shadow:0 2px 22px #000e19;color:#a7ffea;letter-spacing:.23em}
+#ending.visible{opacity:1}
+#ending strong{display:block;color:#ecfff8;font:400 clamp(28px,4.8vw,67px)/1.1 Georgia,serif;text-transform:none;letter-spacing:-.045em;margin-top:7px}
+#qa{position:fixed;right:22px;top:90px;z-index:3;background:#081421e8;border:1px solid #53988d;padding:12px;max-width:min(520px,90vw);font:12px/1.45 var(--mono);color:var(--ice)}
+#qa pre{white-space:pre-wrap;user-select:text;margin:7px 0 0}
+@media(max-height:460px){h1{font-size:48px}.panel{padding:0}.panel p{margin-bottom:14px}#help{margin-top:10px}}
+@media(prefers-reduced-motion:reduce){#ending{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="First-person view of the submerged observatory"></canvas>
+<div id="shade"></div>
+<div class="hud">
+  <div class="mast"><i class="mark"></i> Hadal Observatory</div>
+  <div class="depth">Depth <b>06,180 m</b></div>
+  <div id="objective" class="objective" hidden><span id="status">Optics offline</span><b id="hint">Find the amber switch.</b></div>
+  <div id="keys" class="keys" hidden>WASD walk &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; Esc pause</div>
+  <div id="reticle" aria-hidden="true" hidden></div>
+  <div id="cue" hidden><kbd>E</kbd> Restore optics</div>
+  <div id="ending">Optics restored<strong>The Hadal Garden</strong></div>
+</div>
+<div id="overlay"><div class="panel">
+  <div class="eyebrow" id="eyebrow">Hadal Observatory</div>
+  <h1 id="title">The Last<br>Aperture</h1>
+  <p id="summary">At the bottom of the ocean, one instrument is still waiting for power.</p>
+  <button id="start" disabled>Enter observatory <span aria-hidden="true">↗</span></button>
+  <div id="help">WASD walk &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; E interact &nbsp;·&nbsp; Esc pause &nbsp;·&nbsp; R restart</div>
+</div></div>
+<aside id="qa" hidden><button id="runQA">Run 60-second verification</button> <button id="captureQA">Capture six views + clip</button><pre id="qaResult"></pre></aside>
+<script type="module">
+const id = name => document.getElementById(name);
+const canvas = id('scene');
+const overlay = id('overlay');
+const start = id('start');
+const cue = id('cue');
+const objective = id('objective');
+const ending = id('ending');
+const query = new URLSearchParams(location.search);
+const qa = query.has('qa');
+const TAU = 2 * Math.PI;
+const PEDESTAL_X = 2.72, PEDESTAL_Z = .78;
+const SPAWN_X = .20, SPAWN_Z = 6.12, SPAWN_YAW = .121, SPAWN_PITCH = .099;
+const SWEEP_SECONDS = 13.6;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const mix = (a, b, f) => a + (b-a)*f;
+function smooth(a,b,t) {
+  const u = clamp((t-a)/(b-a),0,1);
+  return u*u*(3-2*u);
+}
+let seed = 54063;
+function random() {
+  seed = (Math.imul(seed,1664525)+1013904223) >>> 0;
+  return seed / 4294967296;
+}
+const add = (a,b) => [a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+const sub = (a,b) => [a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const mul = (a,s) => [a[0]*s,a[1]*s,a[2]*s];
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function unit(a) {
+  return mul(a,1/(Math.hypot(...a)||1));
+}
+const SAMPLE_COUNT = 4;
+const materials = {
+  floor:[.091,.145,.165,0], seam:[.025,.051,.067,0], wall:[.102,.17,.18,1],
+  rim:[.073,.124,.135,1], iron:[.050,.088,.103,1], edge:[.175,.242,.240,1],
+  brass:[.37,.234,.108,2], bright:[.58,.391,.191,2], rust:[.205,.107,.061,2],
+  black:[.021,.045,.054,1], lens:[.047,.209,.230,7], amber:[1.0,.49,.105,3],
+  brassMark:[.279,.244,.155,0], teal:[.16,.69,.61,4], pale:[.51,.72,.68,4],
+  rock:[.066,.156,.174,5], glass:[.073,.25,.29,6], label:[.69,.57,.36,9],
+  live:[.38,.65,.42,10], readyLabel:[.74,.58,.32,13], onlineLabel:[.38,.84,.73,14], animal:[.092,.32,.30,8], spots:[.26,.82,.69,12],
+  coral:[.061,.27,.227,5],
+};
+class Mesh {
+  constructor() { this.data = []; }
+  vertex(p,n,m,tone=1) {
+    this.data.push(...p,...n,m[0]*tone,m[1]*tone,m[2]*tone,m[3]);
+  }
+  tri(a,b,c,m,tone=1,n) {
+    const normal = n || unit(cross(sub(b,a),sub(c,a)));
+    this.vertex(a,normal,m,tone); this.vertex(b,normal,m,tone); this.vertex(c,normal,m,tone);
+  }
+  quad(a,b,c,d,m,tone=1,n) {
+    const normal = n || unit(cross(sub(b,a),sub(c,a)));
+    this.tri(a,b,c,m,tone,normal); this.tri(a,c,d,m,tone,normal);
+  }
+  box(x,y,z,w,h,d,m) { this.cuboid([x,y,z],[w,0,0],[0,h,0],[0,0,d],m); }
+  cuboid(center,w,h,d,m) {
+    const a = sub(sub(sub(center,mul(w,.5)),mul(h,.5)),mul(d,.5));
+    const b=add(a,w), c=add(b,h), e=add(a,h);
+    const f=add(a,d), g=add(b,d), j=add(c,d), k=add(e,d);
+    this.quad(a,e,c,b,m); this.quad(f,g,j,k,m); this.quad(a,f,k,e,m);
+    this.quad(b,c,j,g,m); this.quad(e,k,j,c,m); this.quad(a,b,g,f,m);
+  }
+  pipe(a,b,r1,r2,m,sides=16,caps=true) {
+    const dir=unit(sub(b,a));
+    const u=unit(cross(Math.abs(dir[1])>.87?[1,0,0]:[0,1,0],dir));
+    const v=cross(dir,u);
+    for(let i=0;i<sides;i++) {
+      const t=i*TAU/sides, t2=(i+1)*TAU/sides;
+      const n1=add(mul(u,Math.cos(t)),mul(v,Math.sin(t)));
+      const n2=add(mul(u,Math.cos(t2)),mul(v,Math.sin(t2)));
+      const a1=add(a,mul(n1,r1)), a2=add(a,mul(n2,r1));
+      const b1=add(b,mul(n1,r2)), b2=add(b,mul(n2,r2));
+      if(sides>=12) {
+        const slope=(r1-r2)/Math.hypot(...sub(b,a));
+        const na=unit(add(n1,mul(dir,slope))), nb=unit(add(n2,mul(dir,slope)));
+        this.vertex(a1,na,m); this.vertex(a2,nb,m); this.vertex(b2,nb,m);
+        this.vertex(a1,na,m); this.vertex(b2,nb,m); this.vertex(b1,na,m);
+      } else {
+        this.quad(a1,a2,b2,b1,m,1,unit(add(n1,n2)));
+      }
+      if(caps) { this.tri(a,a2,a1,m,1,mul(dir,-1)); this.tri(b,b1,b2,m,1,dir); }
+    }
+  }
+  ring(x,y,z,r,w,h,m,sides=112,start=0,end=TAU) {
+    const p=(a,r,y)=>[x+r*Math.sin(a),y,z-r*Math.cos(a)];
+    for(let i=0;i<sides;i++) {
+      const a=mix(start,end,i/sides), b=mix(start,end,(i+1)/sides);
+      const il=p(a,r-w/2,y-h/2), ir=p(b,r-w/2,y-h/2);
+      const itl=p(a,r-w/2,y+h/2), itr=p(b,r-w/2,y+h/2);
+      const ol=p(a,r+w/2,y-h/2), or=p(b,r+w/2,y-h/2);
+      const otl=p(a,r+w/2,y+h/2), otr=p(b,r+w/2,y+h/2);
+      this.quad(itl,otl,otr,itr,m,1,[0,1,0]);
+      if(h>.003) { this.quad(il,itl,itr,ir,m); this.quad(ol,or,otr,otl,m); }
+    }
+  }
+}
+const glyphs = {
+  A:[14,17,17,31,17,17,17], C:[14,17,16,16,16,17,14], E:[31,16,16,30,16,16,31],
+  H:[17,17,17,31,17,17,17], I:[31,4,4,4,4,4,31], L:[16,16,16,16,16,16,31],
+  N:[17,25,21,19,17,17,17], O:[14,17,17,17,17,17,14], P:[30,17,17,30,16,16,16],
+  R:[30,17,17,30,20,18,17], S:[15,16,16,14,1,1,30], T:[31,4,4,4,4,4,4],
+  D:[28,18,17,17,17,18,28], F:[31,16,16,30,16,16,16], G:[14,17,16,23,17,17,14],
+  Y:[17,17,10,4,4,4,4], '0':[14,17,19,21,25,17,14], '1':[4,12,4,4,4,4,14],
+  '6':[6,8,16,30,17,17,14], '8':[14,17,17,14,17,17,14], '-':[0,0,0,31,0,0,0]
+};
+function lettering(mesh, str, center, size, right, up, material) {
+  const from=-(str.length*6-1)*size/2;
+  for(let i=0;i<str.length;i++) {
+    const rows=glyphs[str[i]];
+    if(!rows) continue;
+    for(let y=0;y<7;y++) {
+      for(let x=0;x<5;x++) {
+        if(!(rows[y]&(16>>x))) continue;
+        const a=add(center,add(mul(right,from+(i*6+x)*size),mul(up,(3-y)*size)));
+        const b=add(a,mul(right,size*1.002)), c=add(b,mul(up,size*1.002)), d=add(a,mul(up,size*1.002));
+        mesh.quad(a,b,c,d,material,1,unit(cross(right,up)));
+      }
+    }
+  }
+}
+const shell = new Mesh(), outer = new Mesh(), scope = new Mesh(), glass = new Mesh(), ray = new Mesh();
+const M = materials;
+const domeY = theta => 1.04 + 4.83 * Math.cos(theta);
+const domeR = theta => 8.35 * Math.sin(theta);
+const domeP = (theta,a) => [domeR(theta)*Math.sin(a),domeY(theta),-domeR(theta)*Math.cos(a)];
+
+function buildRoom() {
+  const mesh=shell;
+  const panels=16;
+  const phase=Math.PI/panels;
+  mesh.ring(0,.026,0,8.17,.32,.05,M.edge);
+  mesh.ring(0,.044,0,7.58,.047,.01,M.brassMark);
+  mesh.ring(0,.047,0,6.93,.019,.01,M.seam);
+  mesh.ring(0,.048,0,4.1,.022,.01,M.seam);
+  mesh.ring(0,.052,0,2.04,.039,.01,M.brassMark);
+  mesh.ring(0,.050,0,1.9,.012,.01,M.edge);
+  mesh.ring(0,.051,0,1.15,.021,.01,M.edge);
+  mesh.ring(0,.070,0,8.37,.30,.12,M.iron);
+  for(let i=0;i<panels;i++) {
+    const a=i*TAU/panels+phase, b=(i+1)*TAU/panels+phase;
+    const p=(ang,r,y=0)=>[r*Math.sin(ang),y,-r*Math.cos(ang)];
+    for(let j=0;j<10;j++) {
+      const l=mix(a+.002,b-.002,j/10), r=mix(a+.002,b-.002,(j+1)/10);
+      mesh.quad(p(l,.26),p(l,8.3),p(r,8.3),p(r,.26),M.floor,.85+.21*Math.sin(i*7.13),[0,1,0]);
+      mesh.quad(p(l,8.25,.08),p(l,8.25,.93),p(r,8.25,.93),p(r,8.25,.08),M.wall,.78+.20*Math.sin(i*7.13));
+    }
+    mesh.pipe(p(a,2.19,.02),p(a,8.10,.02),.014,.014,M.seam,4,false);
+    for(let j=0;j<6;j++) {
+      const aa=a+.040+j*.031;
+      mesh.ring(0,.048,0,7.69,.17,.01,i%4===0?M.brassMark:M.edge,1,aa,aa+.012);
+    }
+    const mid=(a+b)/2;
+    const ins=[Math.sin(mid),0,-Math.cos(mid)];
+    const tangent=[Math.cos(mid),0,Math.sin(mid)];
+    mesh.cuboid(p(mid,8.19,.37),mul(tangent,.89),[0,.38,0],mul(ins,.13),M.iron);
+    mesh.cuboid(p(mid,8.10,.39),mul(tangent,.73),[0,.21,0],mul(ins,.05),M.black);
+    for(let j=-4;j<=4;j++) {
+      mesh.cuboid(add(p(mid,8.06,.39),mul(tangent,j*.073)),mul(tangent,.026),[0,.18,0],mul(ins,.032),M.edge);
+    }
+    for(const aa of [a+.018,b-.018]) {
+      mesh.pipe(p(aa,8.03,.10),p(aa,8.03,1.15),.040,.040,M.iron,8);
+      mesh.pipe(p(aa,8.03,.57),p(aa,8.03,.70),.052,.052,M.edge,8);
+    }
+    mesh.ring(0,.80,0,8.01,.09,.075,M.iron,10,a,b);
+    mesh.ring(0,.92,0,8.18,.20,.09,M.edge,10,a,b);
+    mesh.ring(0,.98,0,8.24,.21,.09,M.rim,10,a,b);
+    mesh.ring(0,1.041,0,8.29,.20,.095,M.iron,10,a,b);
+    mesh.ring(0,.875,0,8.072,.031,.023,M.teal,4,mid-.116,mid+.116);
+
+    for(let j=0;j<15;j++) {
+      const low=mix(Math.PI/2,.145,j/15), high=mix(Math.PI/2,.145,(j+1)/15);
+      const bottom=domeP(low,a), top=domeP(high,a);
+      mesh.pipe(bottom,top,j<4?.052:.062,j<3?.052:.062,M.rim,6);
+      if(j===0 || j===4 || j===10) {
+        mesh.pipe(bottom,add(bottom,mul(unit(sub(top,bottom)),.19)),.077,.073,M.edge,8);
+      }
+      for(let k=0;k<6;k++) {
+        const az=mix(a,b,k/6), bz=mix(a,b,(k+1)/6);
+        glass.quad(domeP(low,az),domeP(low,bz),domeP(high,bz),domeP(high,az),M.glass);
+      }
+    }
+  }
+  for(const theta of [.152,.42,.85]) {
+    const thick=theta<.43?.12:.039;
+    mesh.ring(0,domeY(theta),0,domeR(theta),thick,thick*.74,M.rim);
+    if(theta<.43) mesh.ring(0,domeY(theta)-.046,0,domeR(theta)-.048,.045,.022,M.edge);
+  }
+  mesh.pipe([0,5.72,0],[0,5.83,0],1.26,1.29,M.iron,48);
+  mesh.pipe([0,5.65,0],[0,5.73,0],.60,.64,M.rim,24);
+  mesh.ring(0,5.63,0,.51,.025,.04,M.teal,48);
+  for(let i=0;i<8;i++) {
+    const a=i*TAU/8, r=6.68;
+    const normal=[Math.sin(a),0,-Math.cos(a)], tangent=[Math.cos(a),0,Math.sin(a)];
+    const center=[r*normal[0],.036,r*normal[2]];
+    mesh.cuboid(center,mul(tangent,1.24),[0,.052,0],mul(normal,.23),M.iron);
+    for(let g=-5;g<=5;g++) {
+      mesh.cuboid(add(center,mul(tangent,g*.100)),mul(tangent,.031),[0,.056,0],mul(normal,.168),M.edge);
+    }
+  }
+  mesh.pipe([0,.01,0],[0,.12,0],1.38,1.31,M.iron,40);
+  mesh.pipe([0,.12,0],[0,.21,0],1.31,1.25,M.rim,40);
+  mesh.ring(0,.146,0,1.30,.035,.025,M.bright,48);
+  mesh.pipe([0,.21,0],[0,.43,0],.96,.82,M.black,32);
+  mesh.pipe([0,.40,0],[0,.67,0],.83,.66,M.rust,32);
+  mesh.pipe([0,.67,0],[0,1.01,0],.66,.56,M.brass,32);
+  for(let i=0;i<12;i++) {
+    const a=i*TAU/12, s=Math.sin(a), c=Math.cos(a);
+    mesh.pipe([s*.95,.31,c*.95],[s*.62,.91,c*.62],.054,.047,M.bright,6);
+    mesh.pipe([s*1.16,.20,c*1.16],[s*1.16,.241,c*1.16],.047,.047,M.edge,6);
+    mesh.ring(0,.246,0,1.03,.070,.020,M.teal,3,a-.042,a+.042);
+  }
+  mesh.pipe([0,1,0],[0,1.16,0],.57,.55,M.iron,32);
+  mesh.pipe([0,1.16,0],[0,1.26,0],.56,.64,M.bright,32);
+  mesh.pipe([0,1.26,0],[0,1.72,0],.61,.47,M.rim,32);
+  mesh.ring(0,1.28,0,.61,.07,.04,M.brass,32);
+  mesh.box(0,.79,.738,.45,.17,.042,M.iron);
+  mesh.box(0,.79,.762,.411,.135,.012,M.rust);
+  lettering(mesh,'A-06',[0,.79,.77],.013,[1,0,0],[0,1,0],M.label);
+  const px=PEDESTAL_X, pz=PEDESTAL_Z;
+  mesh.box(px,.076,pz,1.26,.15,.94,M.iron);
+  mesh.box(px,.175,pz,1.14,.07,.83,M.edge);
+  mesh.box(px,.59,pz,.72,.80,.55,M.iron);
+  mesh.box(px,.56,pz+.278,.52,.58,.021,M.wall);
+  for(let i=-1;i<=1;i++) mesh.box(px+i*.135,.54,pz+.30,.022,.36,.023,M.rim);
+  mesh.box(px,1.02,pz,.97,.12,.75,M.edge);
+  mesh.box(px,1.10,pz,.87,.12,.66,M.iron);
+  const back=[px,1.192,pz-.32], front=[px,1.082,pz+.32];
+  const center=mul(add(back,front),.5), topUp=unit(sub(back,front));
+  mesh.cuboid(center,[.91,0,0],[0,.075,0],sub(front,back),M.black);
+  mesh.cuboid(add(center,[0,.045,0]),[.80,0,0],[0,.014,0],mul(sub(front,back),.88),M.wall);
+  mesh.box(px,1.032,pz+.385,.79,.085,.022,M.black);
+  mesh.box(px,1.044,pz+.400,.68,.023,.014,M.live);
+  lettering(mesh,'OPTICS',[px,1.173,pz+.172],.014,[1,0,0],topUp,M.label);
+  lettering(mesh,'RESTORE',[px,1.191,pz+.037],.013,[1,0,0],topUp,M.readyLabel);
+  lettering(mesh,'ONLINE',[px,1.189,pz+.037],.013,[1,0,0],topUp,M.onlineLabel);
+  mesh.box(px,1.175,pz-.145,.363,.069,.229,M.rust);
+  mesh.box(px,1.218,pz-.145,.271,.035,.174,M.iron);
+  mesh.box(px,1.253,pz-.145,.212,.053,.119,M.live);
+  mesh.box(px,1.281,pz-.145,.147,.006,.070,M.live);
+  mesh.box(px,1.052,pz+.407,.57,.006,.004,M.live);
+  for(const offset of [-.348,.348]) {
+    mesh.box(px+offset,1.169,pz+.092,.029,.011,.035,M.amber);
+    mesh.box(px+offset,1.198,pz-.100,.027,.012,.031,M.edge);
+  }
+  const cable=[[px,.252,pz-.33],[px,.072,pz-.57],[px-.24,.047,pz-.82],[px-.68,.047,pz-.88],[px-1.57,.047,pz-.70]];
+  for(let i=0;i<cable.length-1;i++) mesh.pipe(cable[i],cable[i+1],.029,.029,M.black,8);
+  lettering(mesh,'OPTICS',[px,.058,2.00],.020,[1,0,0],[0,0,-1],M.brassMark);
+  for(let i=0;i<5;i++) {
+    const z=2.44+.56*i;
+    mesh.cuboid([px-.046,.055,z],[.11,0,.090],[0,.009,0],[-.015,0,.024],M.label);
+    mesh.cuboid([px+.046,.055,z],[.11,0,-.090],[0,.009,0],[.015,0,.024],M.label);
+  }
+  lettering(mesh,'HADAL',[0,.061,4.92],.026,[1,0,0],[0,0,-1],M.brassMark);
+  lettering(mesh,'06-180',[0,.060,5.17],.020,[1,0,0],[0,0,-1],M.brassMark);
+}
+function buildScope() {
+  const mesh=scope;
+  const tube=(a,b,r1,r2,mat,n=32,caps=true)=>mesh.pipe([0,0,a],[0,0,b],r1,r2,mat,n,caps);
+  tube(-1.86,1.09,.462,.299,M.brass,40);
+  tube(-2.23,-1.82,.557,.480,M.rust,40,false);
+  tube(-2.24,-2.16,.567,.566,M.bright,40,false);
+  tube(-2.24,-1.89,.489,.393,M.black,40);
+  tube(-2.025,-2.023,.399,.399,M.lens,48);
+  tube(-1.74,-1.60,.500,.494,M.bright,40);
+  tube(-.92,-.83,.442,.442,M.rust);
+  tube(-.65,-.27,.448,.443,M.iron,36);
+  tube(-.63,-.58,.462,.462,M.bright);
+  tube(-.34,-.29,.454,.454,M.bright);
+  tube(.49,.59,.379,.378,M.bright);
+  tube(.98,1.18,.336,.328,M.rust);
+  tube(1.16,1.43,.328,.251,M.brass);
+  tube(1.43,1.53,.251,.251,M.bright);
+  tube(1.52,1.66,.221,.156,M.iron);
+  tube(1.65,1.78,.155,.158,M.edge);
+  tube(1.777,1.792,.104,.104,M.lens);
+  tube(1.784,1.814,.157,.151,M.black,32,false);
+  for(let i=0;i<12;i++) {
+    const a=i*TAU/12,s=Math.sin(a),c=Math.cos(a);
+    mesh.pipe([s*.514,c*.514,-2.14],[s*.457,c*.457,-1.60],.025,.020,M.bright,6);
+    mesh.pipe([s*.288,c*.288,1.08],[s*.312,c*.312,1.23],.022,.019,M.edge,6);
+    mesh.pipe([s*.393,c*.393,.54],[s*.407,c*.407,.54],.030,.026,M.black,6);
+  }
+  for(const side of [-1,1]) {
+    mesh.pipe([side*.38,-.014,-.43],[side*.548,-.014,-.43],.244,.213,M.rust,24);
+    mesh.pipe([side*.545,-.014,-.43],[side*.615,-.014,-.43],.193,.180,M.bright,24);
+    mesh.pipe([side*.614,-.014,-.43],[side*.631,-.014,-.43],.133,.133,M.iron,20);
+    mesh.pipe([side*.21,-.43,-.75],[side*.40,-.23,-.47],.119,.10,M.iron,12);
+    mesh.pipe([side*.42,-.22,-.55],[side*.319,-.22,1.02],.041,.041,M.rim,12);
+    mesh.pipe([side*.424,-.146,-.63],[side*.30,-.146,.88],.018,.018,M.bright,10);
+    mesh.box(side*.34,-.093,.68,.050,.16,.35,M.rust);
+  }
+  mesh.pipe([.225,.32,-.77],[.225,.56,-.77],.075,.064,M.iron,12);
+  mesh.pipe([.225,.30,.33],[.225,.56,.33],.072,.064,M.iron,12);
+  mesh.pipe([.225,.55,-1.10],[.225,.55,.60],.106,.087,M.brass,20);
+  mesh.pipe([.225,.55,-1.17],[.225,.55,-.97],.145,.138,M.rust,20);
+  mesh.pipe([.225,.55,-1.181],[.225,.55,-1.171],.126,.126,M.lens,20);
+  mesh.pipe([.225,.55,.531],[.225,.55,.687],.108,.110,M.black,20);
+  mesh.pipe([.225,.55,.686],[.225,.55,.694],.077,.077,M.lens,20);
+  mesh.box(.398,.01,-.425,.039,.124,.25,M.iron);
+  mesh.box(.422,.017,-.425,.011,.025,.13,M.teal);
+}
+function rockSpire(x,z,y,h,sx,sz,lean=0) {
+  const count=15, layers=11;
+  const grid=[];
+  const phase=random()*TAU;
+  const teeth=Array.from({length:count},()=>.79+random()*.36);
+  const drift=Array.from({length:count},()=>random()*TAU);
+  for(let j=0;j<=layers;j++) {
+    const t=j/layers, ring=[];
+    const taper=Math.pow(Math.max(.019,1-t),.64)*(.89+.14*Math.sin(t*17+phase)+.11*Math.cos(t*31+phase));
+    for(let i=0;i<count;i++) {
+      const a=phase+i*TAU/count;
+      const r=taper*teeth[i]*(.87+.18*random()+.16*Math.sin(t*9+drift[i]));
+      ring.push([x+Math.cos(a)*sx*r+lean*t, y+t*h+(j===0?0:(random()-.5)*h*.088), z+Math.sin(a)*sz*r+Math.sin(t*3.2)*sz*.22]);
+    }
+    grid.push(ring);
+  }
+  for(let j=0;j<layers;j++) for(let i=0;i<count;i++) {
+    const k=(i+1)%count, a=grid[j][i], b=grid[j+1][i], c=grid[j+1][k], d=grid[j][k];
+    const tone=.77+.31*random();
+    outer.tri(a,b,c,M.rock,tone);
+    outer.tri(a,c,d,M.rock,tone*(.93+.13*random()));
+  }
+}
+function ridge(centers,radii) {
+  const shape=[], sides=12;
+  for(let i=0;i<centers.length;i++) {
+    const c=centers[i], d=unit(sub(centers[Math.min(i+1,centers.length-1)],centers[Math.max(0,i-1)]));
+    const u=unit(cross(d,[0,0,1])), v=cross(d,u), row=[];
+    for(let j=0;j<sides;j++) {
+      const theta=j*TAU/sides, radius=radii[i]*(.85+.27*random());
+      row.push(add(c,add(mul(u,Math.cos(theta)*radius),mul(v,Math.sin(theta)*radius*.78))));
+    }
+    shape.push(row);
+  }
+  for(let i=0;i<shape.length-1;i++) for(let j=0;j<sides;j++) {
+    const k=(j+1)%sides, tone=.72+random()*.32;
+    outer.tri(shape[i][j],shape[i][k],shape[i+1][k],M.rock,tone);
+    outer.tri(shape[i][j],shape[i+1][k],shape[i+1][j],M.rock,tone);
+  }
+}
+function seaFan(x,y,z,h,az) {
+  const u=[Math.cos(az),0,Math.sin(az)];
+  const p=(side,up,depth=0)=>[x+u[0]*side+u[2]*depth,y+up,z+u[2]*side-u[0]*depth];
+  const stem=[[0,0],[.045*h,.27*h],[-.03*h,.57*h],[.08*h,h]];
+  for(let j=0;j<stem.length-1;j++) {
+    const [sx,sy]=stem[j], [ex,ey]=stem[j+1];
+    outer.pipe(p(sx,sy),p(ex,ey),h*(.032-j*.007),h*(.025-j*.007),M.coral,5);
+  }
+  for(const wing of [-1,1]) {
+    for(let j=0;j<6;j++) {
+      const by=h*(.32+.09*j), width=wing*h*(.48+.17*Math.sin(j*.75)), top=by+h*(.70-j*.048);
+      const a=p(0,by);
+      const b=p(width*.50,mix(by,top,.56),.05*h);
+      const c=p(width,top,random()*.12*h);
+      outer.pipe(a,b,.020*h,.014*h,M.coral,5);
+      outer.pipe(b,c,.014*h,.004*h,M.coral,5);
+      for(let k=0;k<4;k++) {
+        const t=(k+1)/5, base=add(a,mul(sub(c,a),t));
+        base[1]+=Math.sin(t*Math.PI)*.025*h;
+        const tip=add(base,[u[0]*wing*.16*h,(.17-.019*k)*h,u[2]*wing*.16*h]);
+        outer.pipe(base,tip,.008*h,.002*h,M.coral,4);
+        if(random()>.34) outer.pipe(sub(tip,[0,.015*h,0]),tip,.012*h,.007*h,M.spots,5);
+      }
+    }
+  }
+}
+function buildOutside() {
+  rockSpire(-17,-18,-14,24,8.5,9.3,-3.4);
+  rockSpire(-24,-26,-15,35,12,13,1.8);
+  rockSpire(-14,-26,-14,20,6.5,7.3,-3.7);
+  rockSpire(15,-21,-16,24,7.2,9.1,3.1);
+  rockSpire(23,-28,-13,31,12.0,11.3,-1.8);
+  rockSpire(33,-37,-15,38,15.0,12.0,-5.5);
+  rockSpire(-12,-48,-16,29,7.5,8.8,-3.4);
+  rockSpire(15,-54,-16,30,7.4,10,2.1);
+  rockSpire(4,-56,-16,18,6.7,6.0,1.8);
+  rockSpire(-1,-74,-17,22,3.6,6.1,-4.0);
+  rockSpire(-9,-81,-19,28,5.7,11,1.3);
+  ridge([[-20,-13,-52],[-16,-5,-51],[-13,3,-52],[-9,8.9,-53],[-4.5,10.2,-54],[0,9,-55],[4,6,-54],[8,.6,-52],[11,-9,-50]], [5.2,4.2,3.2,2.5,2.2,2,2.6,3.4,5.2]);
+  for(let i=0;i<38;i++) {
+    const a=random()*TAU,r=20+random()*74,s=4+random()*11;
+    rockSpire(Math.sin(a)*r,-Math.cos(a)*r,-21+random()*3,7+random()*24,s,s*.9,(random()-.5)*8);
+  }
+  for(let i=0;i<58;i++) {
+    const sign=i%2===0?-1:1;
+    const x=sign*(7+random()*12), z=-12-random()*39;
+    const y=-6.6+random()*2.8, h=.45+random()*1.85;
+    const base=[x,y,z], top=[x+(random()-.5)*.71,y+h,z+(random()-.5)*.7];
+    outer.pipe(base,top,.054,.012,M.coral,5);
+    const fork=mix(.39,.72,random()), branch=add(base,mul(sub(top,base),fork));
+    const end=add(top,[sign*(.33+random()*.52),-.12,random()*.32]);
+    outer.pipe(branch,end,.032,.012,M.coral,5);
+    outer.pipe(sub(top,[0,.065,0]),top,.034,.018,M.spots,6);
+    outer.pipe(sub(end,[0,.055,0]),end,.031,.014,M.spots,6);
+  }
+  for(const [x,z,y,w] of [[-7.2,-14,.2,2.8],[-9.5,-18,.6,3.6],[-13.3,-21,2.0,5.1],
+      [9.4,-17,-.2,3.7],[13.1,-20,.5,3.8],[12.1,-24,1.5,4.2],[-7.5,-38,.4,4.0]]) {
+    rockSpire(x,z,y-8,9,w,3.4,(random()-.5)*3);
+    for(let k=0;k<4;k++) {
+      seaFan(x+(random()-.5)*w*.90,y+(random()-.5)*1.8,z+(random()-.5)*2.2,
+        1.05+random()*1.65,(random()-.5)*1.3);
+    }
+  }
+  const section = [
+    [0,-1.42,2.55,.38],[.66,-1.17,2.16,.29],[1.46,-.77,1.69,.20],
+    [2.38,-.12,1.19,.13],[3.22,.45,1.47,.053],[4.03,1.17,1.43,.014]
+  ];
+  for(const side of [-1,1]) {
+    const top=[], bottom=[];
+    for(const [x,front,back,thick] of section) {
+      const row=[], lower=[];
+      for(let j=0;j<=8;j++) {
+        const t=j/8, thickness=Math.sin(Math.PI*t)*thick;
+        row.push([side*x,thickness+Math.abs(x)*.018,mix(front,back,t)]);
+        lower.push([side*x,-thickness*.65+Math.abs(x)*.018,mix(front,back,t)]);
+      }
+      top.push(row); bottom.push(lower);
+    }
+    for(let i=0;i<section.length-1;i++) for(let j=0;j<8;j++) {
+      ray.quad(top[i][j],top[i][j+1],top[i+1][j+1],top[i+1][j],M.animal,.64+i*.07);
+      ray.quad(bottom[i][j+1],bottom[i][j],bottom[i+1][j],bottom[i+1][j+1],M.animal,.77+i*.03);
+    }
+    ray.pipe([side*.37,.04,-1.00],[side*.55,-.02,-1.91],.135,.058,M.animal,10);
+    for(let i=0;i<6;i++) {
+      const x=side*(.36+i*.45), y=-.20+i*.032, z=mix(-.74,.54,i/5);
+      ray.pipe([x,y,z],[x+.075*side,y,z+.096],.027,.018,M.spots,6);
+    }
+  }
+  const tail=[[0,.015,1.93],[0,-.06,3.04],[.13,-.17,4.27],[.32,-.24,5.18],[.43,-.20,6.15]];
+  for(let i=0;i<tail.length-1;i++) ray.pipe(tail[i],tail[i+1],.092-i*.021,.071-i*.021,M.animal,8);
+}
+const common = `
+struct Frame {
+  eye: vec4f,
+  forward: vec4f,
+  right: vec4f,
+  up: vec4f,
+  optics: vec4f,
+  fx: vec4f,
+  view: vec4f,
+  animal: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+
+fn project(p:vec3f) -> vec4f {
+  let d = p - frame.eye.xyz;
+  let z = dot(d,frame.forward.xyz);
+  return vec4f(dot(d,frame.right.xyz)/(frame.view.x*frame.view.y),
+    dot(d,frame.up.xyz)/frame.view.y, z*1.000426-.085036, z);
+}
+fn hash(p:vec2f) -> f32 {
+  let q = fract(vec3f(p.x,p.y,p.x)*.1031);
+  let r = q+dot(q,q.yzx+33.33);
+  return fract((r.x+r.y)*r.z);
+}
+fn noise(p:vec2f) -> f32 {
+  let i=floor(p);
+  let f=fract(p);
+  let u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2f(1,0)),u.x),
+      mix(hash(i+vec2f(0,1)),hash(i+vec2f(1,1)),u.x),u.y);
+}
+fn grain(pixel:vec2f) -> f32 {
+  return (hash(pixel)-.5)*.006;
+}
+fn grade(c:vec3f) -> vec3f {
+  return pow(max(c,vec3f(0)),vec3f(.76));
+}
+fn ribbon(d:vec3f) -> f32 {
+  let yaw = atan2(d.x,-d.z);
+  let center = frame.fx.y;
+  let a=atan2(sin(yaw-center),cos(yaw-center));
+  let centerHeight=.14+.11*sin(yaw*3.9+frame.eye.w*.43);
+  let h=d.y-centerHeight;
+  let ripples=.67+.33*sin(yaw*13.+frame.eye.w*.77);
+  let veil=exp(-a*a*7.75-h*h*86.)*.46;
+  let silk=exp(-a*a*6.4-pow(h*23.,2.))*ripples*.72;
+  return (veil+silk)*frame.fx.z;
+}
+fn sea(d:vec3f) -> vec3f {
+  let t=frame.eye.w;
+  let front=smoothstep(-.13,.94,-d.z);
+  let horizon=exp(-pow((d.y-.095)*2.45,2.));
+  let haze=noise(d.xz*5.6+vec2f(d.y*5.3,t*.023));
+  let r=ribbon(d);
+  let depth=mix(vec3f(.005,.013,.040),vec3f(.020,.058,.116),smoothstep(-.64,.87,d.y));
+  let dormant=depth+vec3f(.013,.048,.070)*horizon*front*(.40+.60*haze);
+  let angle=atan2(d.x+.14,-d.z);
+  let rays=.16+.36*pow(max(0.,sin(angle*27.+d.y*9.+t*.22)*.5+.5),5.)
+    +.21*pow(max(0.,cos(angle*41.-d.y*13.-t*.13)*.5+.5),8.);
+  let shaft=front*exp(-pow((d.x+.33*d.y+.13)*1.58,2.))*smoothstep(-.22,.66,d.y);
+  let glow=exp(-pow(d.x*1.65+.44,2.)-pow((d.y-.22)*2.65,2.))*front;
+  let bloom=noise(vec2f(angle*3.8,d.y*7.1+t*.019));
+  let marine=vec3f(.006,.024,.068)+front*horizon*(.30+.33*haze)*vec3f(.027,.21,.28)
+    +glow*(.61+.30*bloom)*vec3f(.035,.227,.239);
+  let lit=marine+shaft*(.19+rays)*vec3f(.045,.39,.32)+r*vec3f(.032,.322,.252);
+  return mix(dormant,lit,frame.fx.x);
+}
+`;
+const environment = common + `
+struct Sky { @builtin(position) clip:vec4f, @location(0) uv:vec2f };
+@vertex fn skyVertex(@builtin(vertex_index) i:u32) -> Sky {
+  var p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));
+  var o:Sky;
+  o.clip=vec4f(p[i],.999999,1);
+  o.uv=p[i];
+  return o;
+}
+@fragment fn skyFragment(i:Sky) -> @location(0) vec4f {
+  let d=normalize(frame.forward.xyz+frame.right.xyz*i.uv.x*frame.view.x*frame.view.y+
+    frame.up.xyz*i.uv.y*frame.view.y);
+  return vec4f(grade(sea(d))+grain(i.clip.xy),1);
+}
+`;
+const surfaces = common + `
+struct Vert { @location(0) p:vec3f,@location(1) n:vec3f,@location(2) material:vec4f };
+struct Pixel { @builtin(position) pos:vec4f,@location(0) point:vec3f,@location(1) normal:vec3f,
+  @location(2) material:vec3f,@location(3) @interpolate(flat) kind:u32 };
+fn send(p:vec3f,n:vec3f,m:vec4f)->Pixel {
+  var o:Pixel;
+  o.pos=project(p);
+  o.point=p; o.normal=n; o.material=m.rgb; o.kind=u32(m.a+.5);
+  return o;
+}
+@vertex fn staticVertex(v:Vert)->Pixel { return send(v.p,v.n,v.material); }
+fn rotate(p:vec3f)->vec3f {
+  let a=frame.optics;
+  let q=vec3f(p.x,p.y*a.z-p.z*a.w,p.y*a.w+p.z*a.z);
+  return vec3f(q.x*a.x-q.z*a.y,q.y,q.x*a.y+q.z*a.x);
+}
+@vertex fn scopeVertex(v:Vert)->Pixel {
+  return send(rotate(v.p)+vec3f(0,1.78,0),rotate(v.n),v.material);
+}
+@vertex fn rayVertex(v:Vert)->Pixel {
+  let t=frame.eye.w;
+  let a=frame.animal.w;
+  var p=v.p;
+  let bend=pow(abs(p.x)/4.03,1.72);
+  p.y+=bend*sin(t*1.58-abs(p.x)*.51)*1.07;
+  p.y+=p.x*(.20+.12*sin(t*.83))+p.z*.16;
+  p.x+=max(p.z-2.4,0.)*sin(t*1.12-p.z*.66)*.10;
+  let c=cos(a);
+  let s=sin(a);
+  return send(frame.animal.xyz+vec3f(c*p.x+s*p.z,p.y,-s*p.x+c*p.z),v.n,v.material);
+}
+@fragment fn solid(i:Pixel)->@location(0) vec4f {
+  let p=i.point; let n=normalize(i.normal);
+  let v=normalize(frame.eye.xyz-p);
+  let d=length(frame.eye.xyz-p);
+  let kind=i.kind;
+  if((kind==13u && frame.fx.w>=0.) || (kind==14u && frame.fx.w<0.)) { discard; }
+  let t=frame.eye.w;
+  let l=normalize(vec3f(-.50,.77,.62));
+  let sweep=ribbon(normalize(p-vec3f(0,1.8,0)));
+  var c=vec3f(0);
+  if(kind==5u || kind==8u || kind==12u) {
+    let bend=noise(p.xz*.17+vec2f(p.y*.11));
+    let yz=vec2f(p.x*.43+p.z*.31,p.y*2.22+p.x*.39+bend*3.69);
+    let strata=noise(yz);
+    let coarse=noise(p.xz*.67+vec2f(p.y*.69,p.y*.25));
+    let grainRock=noise(yz*3.1 + vec2f(p.z*.68,p.x*.51));
+    let fissure=smoothstep(.55,.77,strata)*(.32+.68*coarse);
+    let bump=.44+.44*strata+.30*coarse+.13*grainRock-fissure*.27;
+    let profile=.16+.79*max(dot(n,normalize(vec3f(-.50,.76,.39))),0.);
+    let lamp=(.25+.71*frame.fx.x+3.0*sweep)*profile*bump;
+    c=i.material*lamp*vec3f(.65,.83,1.13);
+    c+=frame.fx.x*(.13+.87*sweep)*fissure*vec3f(.029,.094,.079);
+    if(kind==8u) {
+      c=mix(vec3f(.005,.021,.036),i.material*.48,clamp(abs(n.y)*.41,0.,1.));
+      c+=vec3f(.018,.108,.116)*pow(1.-abs(dot(n,v)),4.);
+    }
+    if(kind==12u) { c=i.material*(.012+frame.fx.x*.76)*(.88+.12*sin(t*1.7+p.x)); }
+    let originalFog=1.-exp(-d*select(.016+.006*frame.fx.x,.011,kind==8u));
+    let fogColor=sea(-v)*(.83+.08*frame.fx.x);
+    c=mix(c,fogColor,originalFog);
+    if(kind==8u || (kind==12u && abs(p.x-frame.animal.x)<4.4 && abs(p.z-frame.animal.z)<6.4 && p.y>2.)) {
+      c=mix(sea(-v),c,smoothstep(3.5,7.6,frame.fx.w));
+    }
+  } else {
+    let focal=vec3f(2.72,1.25,.78);
+    let delta=focal-p;
+    let len=length(delta);
+    let amber=(.49/(.32+len*len))*(.46+.54*max(0.,dot(n,delta/max(len,.001))));
+    let green=.115/(.30+abs(p.y-.91)*2.3+pow(max(0.,8.14-length(p.xz)),2.)*.54);
+    let diffuse=.28+.57*max(dot(n,l),0.);
+    let reflected=pow(max(dot(n,normalize(l+v)),0.),43.);
+    let fresnel=pow(1.-clamp(abs(dot(n,v)),0.,1.),3.5);
+    let abrasion=noise(p.xz*12.1+vec2f(p.y*15.4,p.y*11.4));
+    let wear=.76+noise(p.xz*5.6+vec2f(p.y*7.3,p.y*4.4))*.30+abrasion*.16;
+    let caustic=(.37+.63*pow(.5+.5*sin(p.x*4.3+p.z*2.9+sin(p.z*2.1-t*.42)+t*.62),5.))*
+        (.39+.61*pow(.5+.5*sin(p.z*4.9-p.x*2.2+sin(p.x*4.8+t*.31)-t*.43),5.));
+    c=i.material*wear*(diffuse*vec3f(.77,.90,1.05)+vec3f(.055,.18,.24));
+    c+=vec3f(.035,.12,.127)*green+amber*select(vec3f(.34,.108,.024),vec3f(.024,.30,.21),frame.fx.w>=0.);
+    c+=vec3f(.05,.21,.24)*caustic*(.14+.54*frame.fx.x)*(.21+.79*max(0.,n.y));
+    if(kind==0u) {
+      let shadow=(.62+.38*smoothstep(.92,2.05,length(p.xz)))*
+        (.75+.25*smoothstep(.36,1.65,length(p.xz-focal.xz)));
+      c*=shadow;
+      c+=vec3f(.021,.039,.061)*smoothstep(2.,8.,length(p.xz));
+    }
+    if(kind==1u || kind==2u) {
+      c+=fresnel*vec3f(.037,.095,.105)*(.32+.50*frame.fx.x);
+      c+=reflected*select(vec3f(.084,.12,.13),vec3f(.68,.44,.23),kind==2u)*.56;
+      let strip=normalize(vec3f(.21+.60*sin(p.z*.71),.76,-.52));
+      let polish=pow(clamp(dot(n,normalize(strip+v)),0.,1.),15.);
+      c+=polish*select(vec3f(.020,.057,.076),vec3f(.136,.09,.041),kind==2u);
+      if(kind==2u) {
+        let patina=smoothstep(.56,.79,noise(p.xz*7.+p.y*8.)*.74+noise(p.yz*26.)*.27);
+        c=mix(c,c*.48+vec3f(.012,.066,.065),patina*.68);
+      }
+    }
+    if(kind==3u) { c=mix(i.material*(.77+.09*sin(t*1.45)),vec3f(.13,.38,.28),frame.fx.x*.77); }
+    if(kind==4u) { c=i.material*(.52+.37*frame.fx.x); }
+    if(kind==7u) {
+      let axial=dot(p-vec3f(0,1.78,0),vec3f(frame.optics.y*frame.optics.z,-frame.optics.w,frame.optics.x*frame.optics.z));
+      let dLens=p-vec3f(0,1.78,0)-vec3f(frame.optics.y*frame.optics.z,-frame.optics.w,frame.optics.x*frame.optics.z)*axial;
+      let lensNormal=normalize(n+dLens*1.34);
+      let glint=pow(max(dot(lensNormal,normalize(v+l)),0.),26.);
+      let fringe=pow(.5+.5*sin(length(dLens)*289.),8.)*.17;
+      c=vec3f(.012,.050,.076)+fresnel*vec3f(.025,.25,.31)+
+        glint*vec3f(.36,.73,.91)+vec3f(.03,.117,.095)*(frame.fx.x+fringe);
+    }
+    if(kind==9u || kind==13u || kind==14u) { c=i.material*.62; }
+    if(kind==10u) {
+      c=select(vec3f(1.,.46,.11)*(.84+.12*sin(t*2.3)),vec3f(.14,.82,.56),frame.fx.w>=0.);
+    }
+    c=mix(c,vec3f(.019,.046,.071),clamp(d*.008,0.,.19));
+  }
+  return vec4f(grade(c)+grain(i.pos.xy),1);
+}
+@fragment fn pane(i:Pixel)->@location(0) vec4f {
+  let p=i.point;
+  let normal=normalize(vec3f(p.x/69.72,(p.y-1.04)/23.33,p.z/69.72));
+  let eye=normalize(frame.eye.xyz-p);
+  let edge=pow(1.-clamp(abs(dot(eye,normal)),0.,1.),3.5);
+  let broad=pow(max(0.,dot(reflect(eye,normal),normalize(vec3f(.42,-.69,.59)))),13.);
+  let arc=pow(.5+.5*cos((p.y+p.z*.26+p.x*.24)*8.2+sin(p.x*.93)*1.6),13.);
+  let scum=noise(vec2f(p.y*3.1,p.x*1.3+p.z*.99));
+  let a=.042+edge*.17+broad*.032+scum*.027;
+  let c=vec3f(.063,.19,.27)+vec3f(.022,.19,.19)*(arc*.55+broad*.68+frame.fx.x*.22);
+  return vec4f(c*a,a);
+}
+`;
+const motes = common + `
+struct Dust { @builtin(position) pos:vec4f,@location(0) uv:vec2f,
+  @location(1) tint:vec3f,@location(2) strength:f32 };
+@vertex fn dustVertex(@builtin(vertex_index) i:u32,@builtin(instance_index) j:u32)->Dust {
+  let f=f32(j);
+  let t=frame.eye.w;
+  let rnd=vec3f(hash(vec2f(f,74)),hash(vec2f(f,13)),hash(vec2f(f,92)));
+  let shape=array<vec2f,6>(vec2f(-1,-1),vec2f(1,-1),vec2f(1,1),vec2f(-1,-1),vec2f(1,1),vec2f(-1,1));
+  let uv=shape[i];
+  var p=vec3f((rnd.x-.5)*111.,rnd.y*27.-8.,(rnd.z-.74)*111.);
+  var radius=.020+.044*rnd.z;
+  var tint=vec3f(.40,.76,.86);
+  var alpha=(.14+frame.fx.x*.29)*(.26+rnd.x*.74);
+  if(j<112u) {
+    p=vec3f((rnd.x-.5)*19.,rnd.y*5.6+.24,(rnd.z-.5)*19.);
+    radius=.008+.013*rnd.z;
+    tint=vec3f(.51,.70,.70);
+    alpha=(.18+rnd.x*.20)*select(0.,1.,length(p.xz)<8.);
+  }
+  if(j>=930u) {
+    p=vec3f(-6.+sin(t*.23)*9.+(rnd.x-.5)*8.,4.8+sin(t*.27)*2.1+rnd.y*2.5,-29.+(rnd.z-.5)*5.);
+    radius=.034+.061*rnd.z;
+    tint=vec3f(.35,.88,.76);
+    alpha=smoothstep(3.4,9.,frame.fx.w)*(.25+rnd.z*.43);
+  }
+  p+=vec3f(sin(t*.33+f)*.32,cos(t*.26+f*2.)*.24,sin(t*.21+f)*.44);
+  var o:Dust;
+  o.pos=project(p+(frame.right.xyz*uv.x+frame.up.xyz*uv.y)*radius);
+  o.uv=uv;
+  o.tint=tint;
+  o.strength=alpha*smoothstep(.45,1.30,distance(frame.eye.xyz,p));
+  return o;
+}
+@fragment fn dustFragment(i:Dust)->@location(0) vec4f {
+  let alpha=pow(max(0.,1.-dot(i.uv,i.uv)),2.)*i.strength;
+  return vec4f(i.tint*alpha,alpha);
+}
+`;
+
+const keys = new Uint8Array(4);
+const keyIndex = new Map([['KeyW',0],['KeyA',1],['KeyS',2],['KeyD',3]]);
+let x, z, yaw, pitch, vx, vz, foot, time, revealTime, activations;
+let running=false, entered=false, reachable=false, playback=null, repaint=true;
+let audio=null, master=null;
+let messageMode='';
+let quality = 1;
+let activeCapture = null;
+
+function reset() {
+  x=SPAWN_X; z=SPAWN_Z; yaw=SPAWN_YAW; pitch=SPAWN_PITCH;
+  vx=0; vz=0; foot=0; time=0; revealTime=-1; activations=0;
+  reachable=false; keys.fill(0); repaint=true;
+  updateHUD();
+}
+function updateHUD() {
+  const showCue=running && reachable && revealTime<0;
+  if(cue.hidden===showCue) cue.hidden=!showCue;
+  if(objective.hidden===running) {
+    objective.hidden=!running;
+    id('keys').hidden=!running;
+    id('reticle').hidden=!running;
+  }
+  ending.classList.toggle('visible',running && revealTime>=SWEEP_SECONDS && revealTime<SWEEP_SECONDS+7);
+  const state=revealTime<0?'offline':revealTime<SWEEP_SECONDS?'aligning':'online';
+  if(state===messageMode) return;
+  messageMode=state;
+  objective.classList.toggle('live',state!=='offline');
+  id('status').textContent=state==='offline'?'Optics offline':state==='aligning'?'Optics aligning':'Optics restored';
+  id('hint').textContent=state==='offline'?'Find the amber switch.':state==='aligning'?'Step back and look through the dome.':'Look around or press R to restart.';
+}
+function audioReady() {
+  try {
+    if(!audio) {
+      audio=new AudioContext();
+      master=audio.createGain();
+      master.gain.value=.64;
+      master.connect(audio.destination);
+    }
+    if(audio.state==='suspended') audio.resume().catch(()=>{});
+  } catch {}
+}
+function chime() {
+  if(!audio || !master || audio.state!=='running') return;
+  const base=audio.currentTime;
+  for(const [hz,delay,level] of [[349.23,0,.095],[523.25,.10,.057],[698.46,.24,.032],[1046.50,.25,.012]]) {
+    const osc=audio.createOscillator();
+    const amp=audio.createGain();
+    osc.frequency.value=hz;
+    const t=base+delay;
+    amp.gain.setValueAtTime(.0001,t);
+    amp.gain.exponentialRampToValueAtTime(level,t+.030);
+    amp.gain.exponentialRampToValueAtTime(.0001,t+1.25);
+    osc.connect(amp); amp.connect(master);
+    osc.start(t); osc.stop(t+1.3);
+    osc.onended=()=>{osc.disconnect();amp.disconnect();};
+  }
+}
+function activate() {
+  if(!running || !reachable || revealTime>=0) return false;
+  revealTime=0;
+  activations++;
+  chime();
+  updateHUD();
+  return true;
+}
+function press(code,down,repeat=false) {
+  const k=keyIndex.get(code);
+  if(k!==undefined) { keys[k]=+down; return; }
+  if(!down || repeat) return;
+  if(code==='KeyE') activate();
+  if(code==='KeyR' && entered) reset();
+}
+function look(dx,dy) {
+  yaw+=dx*.00225;
+  if(yaw>Math.PI) yaw-=TAU;
+  if(yaw<-Math.PI) yaw+=TAU;
+  pitch=clamp(pitch-dy*.00225,-1.19,1.28);
+}
+function pause() {
+  running=false;
+  keys.fill(0);
+  vx=0; vz=0;
+  overlay.hidden=false;
+  if(entered) {
+    id('eyebrow').textContent='Hadal Observatory';
+    id('title').textContent='Paused';
+    id('summary').textContent='The observatory will be here when you return.';
+    start.firstChild.data='Resume observatory ';
+  }
+  updateHUD();
+}
+function resume() {
+  entered=true; running=true;
+  overlay.hidden=true;
+  updateHUD();
+}
+start.addEventListener('click',()=>{
+  audioReady();
+  const result=canvas.requestPointerLock();
+  if(result?.catch) result.catch(()=>{});
+});
+document.addEventListener('pointerlockchange',()=>{
+  if(document.pointerLockElement===canvas) resume();
+  else if(!playback) pause();
+});
+document.addEventListener('pointerlockerror',()=>{
+  if(!running) id('summary').textContent='The mouse could not be captured. Focus this window and try again.';
+});
+document.addEventListener('mousemove',e=>{
+  if(running && !playback && document.pointerLockElement===canvas) look(e.movementX,e.movementY);
+});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Escape' && !playback && running) {
+    if(document.pointerLockElement===canvas) document.exitPointerLock();
+    pause();
+  }
+  if(!playback && (running || e.code==='KeyR')) press(e.code,true,e.repeat);
+});
+document.addEventListener('keyup',e=>{if(!playback) press(e.code,false);});
+window.addEventListener('blur',()=>{
+  if(running && !playback) {
+    if(document.pointerLockElement===canvas) document.exitPointerLock();
+    pause();
+  }
+});
+
+function pushAway(cx,cz,r) {
+  const dx=x-cx, dz=z-cz, d=Math.hypot(dx,dz);
+  if(d<r && d>.001) { x=cx+dx*r/d; z=cz+dz*r/d; }
+}
+function step(dt) {
+  if(!running) return;
+  time+=dt;
+  if(revealTime>=0) revealTime+=dt;
+  const f=keys[0]-keys[2], s=keys[3]-keys[1];
+  const sYaw=Math.sin(yaw), cYaw=Math.cos(yaw);
+  const speed=1.78/(Math.hypot(f,s)||1);
+  const ease=1-Math.exp(-dt*13);
+  vx=mix(vx,(sYaw*f+cYaw*s)*speed,ease);
+  vz=mix(vz,(-cYaw*f+sYaw*s)*speed,ease);
+  x+=vx*dt; z+=vz*dt;
+  const r=Math.hypot(x,z);
+  if(r>7.71) { x*=7.71/r; z*=7.71/r; }
+  pushAway(0,0,1.43);
+  pushAway(PEDESTAL_X,PEDESTAL_Z,.69);
+  const moving=Math.hypot(vx,vz);
+  foot+=moving*dt*6.25;
+  reachable=Math.hypot(x-PEDESTAL_X,z-PEDESTAL_Z)<1.68;
+  updateHUD();
+}
+reset();
+
+let device, context, format, depth, multisampled, frameBuffer, passDescription, frameGroup;
+let adapterDetails;
+const frameData = new Float32Array(32);
+const drawCalls = [];
+let gpuQueries, resolveBuffer, querySlots, meter;
+let installedWidth=0, installedHeight=0, resizePending=true;
+let last=0, lastPresentationTick=-1;
+const queryFrames=64, batchFrames=32;
+const sampleLimit=8192;
+const renderAttachment={view:null,resolveTarget:null,clearValue:{r:.009,g:.021,b:.043,a:1},loadOp:'clear',storeOp:'discard'};
+const submissions=[null];
+const depthAttachment={view:null,depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'discard'};
+const queryWrites={querySet:null,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1};
+function fit() {
+  resizePending=false;
+  const w=Math.max(1,innerWidth), h=Math.max(1,innerHeight);
+  const ratio=Math.min(devicePixelRatio || 1,1920/w,1080/h)*quality;
+  const pw=qa?Math.round(1920*quality):Math.max(1,Math.round(w*ratio));
+  const ph=qa?Math.round(1080*quality):Math.max(1,Math.round(h*ratio));
+  if(pw===installedWidth && ph===installedHeight) return;
+  installedWidth=pw; installedHeight=ph;
+  canvas.width=pw; canvas.height=ph;
+  depth?.destroy();
+  multisampled?.destroy();
+  depth=device.createTexture({size:[pw,ph],format:'depth24plus',sampleCount:SAMPLE_COUNT,usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  multisampled=device.createTexture({size:[pw,ph],format,sampleCount:SAMPLE_COUNT,usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  depthAttachment.view=depth.createView();
+  renderAttachment.view=multisampled.createView();
+}
+window.addEventListener('resize',()=>{resizePending=true;});
+function writeFrame() {
+  const c=Math.cos(yaw),s=Math.sin(yaw), p=Math.cos(pitch), q=Math.sin(pitch);
+  const bob=Math.sin(foot)*.017*clamp(Math.hypot(vx,vz),0,1);
+  frameData[0]=x; frameData[1]=1.63+bob; frameData[2]=z; frameData[3]=time;
+  frameData[4]=s*p; frameData[5]=q; frameData[6]=-c*p;
+  frameData[8]=c; frameData[9]=0; frameData[10]=s;
+  frameData[12]=-s*q; frameData[13]=p; frameData[14]=c*q;
+  const turn=smooth(.48,5.6,revealTime);
+  const angle=mix(-.75,.095,turn);
+  const rise=mix(-.085,.39,turn);
+  frameData[16]=Math.cos(angle); frameData[17]=Math.sin(angle);
+  frameData[18]=Math.cos(rise); frameData[19]=Math.sin(rise);
+  frameData[20]=smooth(1.8,10.8,revealTime);
+  frameData[21]=mix(1.15,-1.02,smooth(2.0,12.2,revealTime))+.12*Math.sin(time*.42);
+  frameData[22]=smooth(1.9,4.8,revealTime)*(1.-.78*smooth(10.6,15.7,revealTime));
+  frameData[23]=revealTime;
+  frameData[24]=installedWidth/installedHeight; frameData[25]=.634;
+  const drift=(revealTime-11.7)*.108;
+  frameData[28]=Math.sin(drift)*9.4; frameData[29]=6.9+Math.sin(drift*.83)*1.21;
+  frameData[30]=-19-Math.cos(drift)*2.7; frameData[31]=-1.14+Math.sin(drift*.67)*.35;
+  device.queue.writeBuffer(frameBuffer,0,frameData);
+}
+function upload(mesh) {
+  const bytes=new Float32Array(mesh.data);
+  const buffer=device.createBuffer({size:bytes.byteLength,usage:GPUBufferUsage.VERTEX,mappedAtCreation:true});
+  new Float32Array(buffer.getMappedRange()).set(bytes);
+  buffer.unmap();
+  mesh.data.length=0;
+  return {buffer,count:bytes.length/10};
+}
+function render(now) {
+  requestAnimationFrame(render);
+  if(deviceLost) return;
+  if(playback?.mode==='benchmark') {
+    const tick=Math.floor((now-playback.start)/(1000/60)+.08);
+    if(tick===lastPresentationTick) return;
+    lastPresentationTick=tick;
+  }
+  const dt=last ? Math.min(.050,(now-last)/1000) : 0;
+  last=now;
+  if(!running && !resizePending && !repaint) return;
+  if(resizePending) fit();
+  repaint=false;
+  if(playback) drive(now,dt);
+  step(dt);
+  writeFrame();
+  const encoder=device.createCommandEncoder();
+  renderAttachment.resolveTarget=context.getCurrentTexture().createView();
+  const sampling=gpuQueries && meter?.active;
+  if(sampling) {
+    const index=(meter.written%queryFrames)*2;
+    queryWrites.beginningOfPassWriteIndex=index;
+    queryWrites.endOfPassWriteIndex=index+1;
+    passDescription.timestampWrites=queryWrites;
+  } else {
+    passDescription.timestampWrites=undefined;
+  }
+  const pass=encoder.beginRenderPass(passDescription);
+  pass.setBindGroup(0,frameGroup);
+  for(let i=0;i<drawCalls.length;i++) {
+    const call=drawCalls[i];
+    if(call.animal && revealTime<3.55) continue;
+    pass.setPipeline(call.pipeline);
+    if(call.buffer) pass.setVertexBuffer(0,call.buffer);
+    pass.draw(call.count,call.instances);
+  }
+  pass.end();
+  if(sampling) {
+    meter.written++;
+    if(meter.written%batchFrames===0 || playback?.finish) flushTimestamps(encoder,meter);
+  }
+  submissions[0]=encoder.finish();
+  device.queue.submit(submissions);
+  if(meter?.active && meter.rafCount<sampleLimit && dt>0 && !resizePending) {
+    meter.raf[meter.rafCount++]=meter.previous ? now-meter.previous : dt*1000;
+    meter.previous=now;
+  }
+  if(playback?.mode==='capture') captureFrame(now);
+  if(playback?.finish) completePlayback(playback);
+}
+function flushTimestamps(encoder, run) {
+  const count=run.written-run.resolved;
+  const first=run.resolved%queryFrames;
+  if(!count) return;
+  run.resolved=run.written;
+  const slot=querySlots.find(candidate=>!candidate.busy);
+  if(!slot) { run.skipped+=count; return; }
+  slot.busy=true;
+  run.pending++;
+  encoder.resolveQuerySet(gpuQueries,first*2,count*2,resolveBuffer,0);
+  encoder.copyBufferToBuffer(resolveBuffer,0,slot.buffer,0,count*16);
+  // Mapping starts after this frame has submitted the copy.
+  queueMicrotask(()=>{
+    slot.buffer.mapAsync(GPUMapMode.READ,0,count*16).then(()=>{
+      const stamps=new BigUint64Array(slot.buffer.getMappedRange(0,count*16));
+      for(let i=0;i<count && run.gpuCount<sampleLimit;i++) {
+        const delta=stamps[i*2+1]-stamps[i*2];
+        if(delta>0n) run.gpu[run.gpuCount++]=Number(delta)/1e6;
+        else run.invalid++;
+      }
+      slot.buffer.unmap();
+    }).catch(()=>{run.invalid+=count;}).finally(()=>{
+      slot.busy=false; run.pending--;
+      if(run.complete && !run.pending) showResult(run);
+    });
+  });
+}
+
+let deviceLost=false;
+function fail(message) {
+  deviceLost=true;
+  running=false;
+  overlay.hidden=false;
+  start.hidden=true;
+  id('help').hidden=true;
+  id('title').textContent='Signal interrupted';
+  id('summary').textContent=message;
+  if(qa) id('qaResult').textContent=message;
+}
+async function boot() {
+  if(!navigator.gpu) throw new Error('WebGPU is unavailable here. Open this file in Microsoft Edge with graphics acceleration enabled.');
+  const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});
+  if(!adapter) throw new Error('Edge could not find a WebGPU adapter. Enable graphics acceleration and reopen this page.');
+  adapterDetails=adapter.info;
+  const timestamps=qa && adapter.features.has('timestamp-query');
+  device=await adapter.requestDevice({requiredFeatures:timestamps?['timestamp-query']:[]});
+  device.lost.then(info=>fail('The GPU connection ended. Reload the page to return to the observatory. '+(qa?info.message:'')));
+  device.addEventListener('uncapturederror',event=>{
+    console.error(event.error.message);
+    fail(qa?event.error.message:'The graphics device reported an error. Reload the page to try again.');
+  });
+  context=canvas.getContext('webgpu');
+  format=navigator.gpu.getPreferredCanvasFormat();
+  context.configure({device,format,alphaMode:'opaque'});
+  frameBuffer=device.createBuffer({size:frameData.byteLength,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const groupLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.VERTEX|GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}}]});
+  frameGroup=device.createBindGroup({layout:groupLayout,entries:[{binding:0,resource:{buffer:frameBuffer}}]});
+  const layout=device.createPipelineLayout({bindGroupLayouts:[groupLayout]});
+  const vertexLayout=[{arrayStride:40,attributes:[
+    {shaderLocation:0,offset:0,format:'float32x3'},
+    {shaderLocation:1,offset:12,format:'float32x3'},
+    {shaderLocation:2,offset:24,format:'float32x4'}
+  ]}];
+  const premultiplied={color:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'},
+    alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'}};
+  const sky=device.createShaderModule({label:'Ocean background',code:environment});
+  const solid=device.createShaderModule({label:'Procedural materials',code:surfaces});
+  const dust=device.createShaderModule({label:'Drifting particles',code:motes});
+  for(const module of [sky,solid,dust]) {
+    const info=await module.getCompilationInfo();
+    const errors=info.messages.filter(message=>message.type==='error');
+    if(errors.length) throw new Error(errors.map(error=>error.message).join(' '));
+  }
+  const pipeline=(label,module,vertex,fragment,mesh,write,blend,compare='less')=>device.createRenderPipelineAsync({
+    label,layout,vertex:{module,entryPoint:vertex,buffers:mesh?vertexLayout:[]},
+    fragment:{module,entryPoint:fragment,targets:[{format,blend}]},
+    primitive:{topology:'triangle-list'},
+    multisample:{count:SAMPLE_COUNT},
+    depthStencil:{format:'depth24plus',depthWriteEnabled:write,depthCompare:compare}
+  });
+  const pipes=await Promise.all([
+    pipeline('Ocean',sky,'skyVertex','skyFragment',false,false,undefined,'always'),
+    pipeline('Room and cliffs',solid,'staticVertex','solid',true,true),
+    pipeline('Telescope',solid,'scopeVertex','solid',true,true),
+    pipeline('Ray',solid,'rayVertex','solid',true,true),
+    pipeline('Particles',dust,'dustVertex','dustFragment',false,false,premultiplied),
+    pipeline('Glass panels',solid,'staticVertex','pane',true,false,premultiplied)
+  ]);
+  buildRoom(); buildScope(); buildOutside();
+  drawCalls.push({pipeline:pipes[0],count:3,instances:1});
+  for(const [mesh,index] of [[shell,1],[scope,2],[outer,1],[ray,3]]) {
+    drawCalls.push({...upload(mesh),pipeline:pipes[index],instances:1,animal:mesh===ray});
+  }
+  drawCalls.push({pipeline:pipes[4],count:6,instances:1010});
+  drawCalls.push({...upload(glass),pipeline:pipes[5],instances:1});
+  if(timestamps) {
+    gpuQueries=device.createQuerySet({type:'timestamp',count:queryFrames*2});
+    queryWrites.querySet=gpuQueries;
+    resolveBuffer=device.createBuffer({size:batchFrames*16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+    querySlots=Array.from({length:5},()=>({
+      busy:false,buffer:device.createBuffer({size:batchFrames*16,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST})
+    }));
+  }
+  passDescription={colorAttachments:[renderAttachment],depthStencilAttachment:depthAttachment};
+  fit();
+  requestAnimationFrame(render);
+  start.disabled=false;
+  if(qa) id('qa').hidden=false;
+}
+
+function stats(data,count) {
+  if(!count) return null;
+  const sorted=data.slice(0,count).sort();
+  return {avg:+(sorted.reduce((sum,n)=>sum+n,0)/count).toFixed(3),
+    p99:+sorted[Math.ceil(count*.99)-1].toFixed(3),max:+sorted[count-1].toFixed(3),samples:count};
+}
+function showResult(run) {
+  const result={
+    output:[installedWidth,installedHeight],
+    browser:navigator.userAgent.match(/Edg\/([\d.]+)/)?.[1] || 'Other browser',
+    adapter:adapterDetails?.description || adapterDetails?.architecture || adapterDetails?.vendor || 'Unavailable',
+    gpu:stats(run.gpu,run.gpuCount),renderIntervals:stats(run.raf,run.rafCount),
+    absentGpuSamples:run.skipped+run.invalid,elapsedSeconds:+run.elapsed.toFixed(2),checks:run.checks,
+    geometryVertices:drawCalls.filter(call=>call.buffer).reduce((n,call)=>n+call.count,0)
+  };
+  id('qaResult').textContent=JSON.stringify(result);
+  const link=document.createElement('a');
+  link.textContent='Download timing data';
+  link.style.cssText='display:block;color:#8df2d2;margin-top:7px';
+  link.href=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));
+  link.download='aperture-timing.json';
+  id('qaResult').append('\n',link);
+}
+const captureTimes = [.65,18.7,8.65,23.15,36.45,45.7];
+const captureNames = ['01-start.png','02-pedestal.png','03-inactive-dome.png',
+  '04-telescope-close-up.png','05-mid-reveal.png','06-final-vista.png'];
+
+function aim(dx,dy,dz,dt) {
+  const ideal=Math.atan2(dx,-dz);
+  const error=Math.atan2(Math.sin(ideal-yaw),Math.cos(ideal-yaw));
+  const e=Math.atan2(dy,Math.hypot(dx,dz))-pitch;
+  const speed=1.-Math.exp(-dt*3.4);
+  look(error*speed/.00225,-e*speed/.00225);
+}
+function move(toX,toZ) {
+  const dx=toX-x,dz=toZ-z, distance=Math.hypot(dx,dz);
+  const side=dx*Math.cos(yaw)+dz*Math.sin(yaw);
+  const front=dx*Math.sin(yaw)-dz*Math.cos(yaw);
+  const threshold=distance*.383;
+  press('KeyW',distance>.12 && front>threshold);
+  press('KeyS',distance>.12 && front<-threshold);
+  press('KeyD',distance>.12 && side>threshold);
+  press('KeyA',distance>.12 && side<-threshold);
+}
+function drive(now,dt) {
+  const p=playback;
+  const t=(now-p.start)/1000;
+  p.elapsed=t;
+  keys.fill(0);
+  if(t>2.5 && t<9) aim(.10-x,3.67-1.63,-7.8-z,dt);
+  if(t>=9 && t<20) {
+    aim(PEDESTAL_X-x,1.16-1.63,PEDESTAL_Z-z,dt);
+    move(2.63,2.05);
+  }
+  if(t>=20 && t<24.25) {
+    aim(-.32-x,1.86-1.63,-.16-z,dt);
+    move(1.63,2.08);
+  }
+  if(t>=24.25 && t<29.2) {
+    aim(PEDESTAL_X-x,1.20-1.63,PEDESTAL_Z-z,dt);
+    move(2.72,2.07);
+  }
+  if(t>=29.2 && t<47.5) {
+    aim(.44-x,5.82-1.63,-24-z,dt);
+    move(1.93,4.73);
+  }
+  if(t>=47.5 && t<52.5) aim(15-x,8.10-1.63,-29-z,dt);
+  if(t>=52.5) aim(.44-x,5.82-1.63,-24-z,dt);
+  if(t>=.5 && !p.checks.remoteBlocked) {
+    if(t<2.5) {
+      press('KeyE',true);
+      p.checks.remoteBlocked=revealTime<0 && cue.hidden;
+    }
+  }
+  if(t>17 && t<20 && reachable && !cue.hidden) p.checks.cueInReach=true;
+  if(t>=29.0 && !p.tried) {
+    p.tried=true;
+    press('KeyE',true);
+    p.checks.activated=revealTime===0 && activations===1;
+  }
+  if(t>=29.45 && !p.retried) {
+    p.retried=true;
+    const before=revealTime;
+    press('KeyE',true);
+    p.checks.repeatBlocked=activations===1 && revealTime===before && cue.hidden;
+  }
+  if(t>45 && revealTime>=SWEEP_SECONDS) p.checks.ending=true;
+  if(t>=(p.mode==='benchmark'?60:47.4)) p.finish=true;
+}
+function completePlayback(p) {
+  playback=null;
+  if(p.mode==='capture') {
+    finishCapture();
+    return;
+  }
+  press('KeyR',true);
+  p.checks.restart=x===SPAWN_X && z===SPAWN_Z && yaw===SPAWN_YAW && pitch===SPAWN_PITCH &&
+    revealTime===-1 && activations===0 && cue.hidden;
+  meter.active=false; meter.complete=true;
+  meter.elapsed=p.elapsed; meter.checks=p.checks;
+  pause();
+  id('qa').hidden=false;
+  id('qaResult').textContent='Reading GPU timestamps…';
+  if(!meter.pending) showResult(meter);
+}
+function launchPlayback(mode) {
+  if(playback || activeCapture || deviceLost) return;
+  audioReady();
+  reset(); resume();
+  if(document.pointerLockElement===canvas) document.exitPointerLock();
+  if(mode==='benchmark') {
+    meter={active:true,complete:false,written:0,resolved:0,skipped:0,invalid:0,pending:0,
+      gpuCount:0,rafCount:0,gpu:new Float64Array(sampleLimit),raf:new Float64Array(sampleLimit),previous:0};
+  }
+  if(mode==='capture') {
+    activeCapture={saved:new Uint8Array(6),images:[],clip:[],recorder:null,started:false};
+  }
+  lastPresentationTick=-1;
+  playback={mode,start:performance.now(),elapsed:0,finish:false,tried:false,retried:false,
+    checks:{remoteBlocked:false,cueInReach:false,activated:false,repeatBlocked:false,ending:false,restart:false}};
+  id('qa').hidden=true;
+}
+function captureFrame(now) {
+  const run=activeCapture, t=playback.elapsed;
+  for(let i=0;i<captureTimes.length;i++) {
+    if(t<captureTimes[i] || run.saved[i]) continue;
+    run.saved[i]=1;
+    run.images[i]=new Promise((resolve,reject)=>canvas.toBlob(blob=>{
+      if(blob) resolve({name:captureNames[i],blob});
+      else reject(new Error('Could not capture '+captureNames[i]));
+    },'image/png'));
+  }
+  if(t<26.3) return;
+  if(run.recorder) {
+    if(now-run.lastCapture<1000/30-1) return;
+    run.lastCapture=now;
+    drawRecording(run);
+    return;
+  }
+  if(run.started) return;
+  run.started=true;
+  try {
+    const video=document.createElement('canvas');
+    video.width=1280; video.height=720;
+    run.composite=video.getContext('2d',{alpha:false});
+    run.lastCapture=now;
+    drawRecording(run);
+    const stream=video.captureStream(30);
+    const audioTap=audio?.createMediaStreamDestination();
+    if(audioTap) {
+      master.connect(audioTap);
+      stream.addTrack(audioTap.stream.getAudioTracks()[0]);
+    }
+    const mimeType=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm';
+    const recorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:4200000});
+    run.recorder=recorder;
+    run.clipReady=new Promise(resolve=>{
+      recorder.addEventListener('dataavailable',event=>{if(event.data.size) run.clip.push(event.data);});
+      recorder.addEventListener('stop',()=>{
+        stream.getTracks().forEach(track=>track.stop());
+        if(audioTap) master.disconnect(audioTap);
+        resolve({name:'observatory-reveal.webm',blob:new Blob(run.clip,{type:'video/webm'})});
+      });
+    });
+    recorder.start();
+  } catch(error) {
+    run.recordError=error.message;
+  }
+}
+function drawRecording(run) {
+  const ctx=run.composite;
+  ctx.drawImage(canvas,0,0,1280,720);
+  ctx.fillStyle='#030c15af';
+  ctx.fillRect(0,666,1280,54);
+  ctx.fillStyle=revealTime<0?'#ffd189':'#6ee5cc';
+  ctx.fillRect(25,678,1,30);
+  ctx.font='12px monospace';
+  ctx.fillText(id('status').textContent.toUpperCase(),35,691);
+  ctx.fillStyle='#e2f7f2';
+  ctx.font='13px system-ui';
+  ctx.fillText(id('hint').textContent,35,708);
+  if(!cue.hidden) {
+    ctx.fillStyle='#08131ce8';
+    ctx.fillRect(558,383,164,30);
+    ctx.strokeStyle='#bb9653';
+    ctx.strokeRect(558.5,383.5,163,29);
+    ctx.fillStyle='#ffd189';
+    ctx.font='12px monospace';
+    ctx.fillText('[E] Restore optics',573,403);
+  }
+}
+async function finishCapture() {
+  const run=activeCapture;
+  run.recorder?.stop();
+  id('qa').hidden=false;
+  id('qaResult').textContent='Packaging the six rendered views and the recording…';
+  const files=await Promise.all(run.clipReady?[...run.images,run.clipReady]:run.images);
+  const blob=await zip(files);
+  const link=document.createElement('a');
+  link.textContent='Download '+(run.recordError?'six views (recording failed: '+run.recordError+')':'six views and reveal recording');
+  link.style.cssText='display:block;color:#8df2d2;margin-top:7px';
+  link.href=URL.createObjectURL(blob);
+  link.download='aperture-visual-qa.zip';
+  id('qaResult').replaceChildren(link);
+  activeCapture=null;
+}
+async function zip(files) {
+  // Stored ZIP records preserve the original canvas captures and video.
+  const table=new Uint32Array(256);
+  for(let i=0;i<256;i++) {
+    let v=i;
+    for(let bit=0;bit<8;bit++) v=(v&1)?0xedb88320^(v>>>1):v>>>1;
+    table[i]=v;
+  }
+  const local=[], directory=[];
+  let offset=0,size=0;
+  for(const {name,blob} of files) {
+    const data=new Uint8Array(await blob.arrayBuffer()), filename=new TextEncoder().encode(name);
+    let crc=0xffffffff;
+    for(const byte of data) crc=table[(crc^byte)&255]^(crc>>>8);
+    crc^=0xffffffff;
+    const entry=new ArrayBuffer(30), index=new ArrayBuffer(46);
+    const a=new DataView(entry), b=new DataView(index);
+    a.setUint32(0,0x04034b50,true); a.setUint16(4,20,true); a.setUint16(12,0x5721,true);
+    a.setUint32(14,crc,true); a.setUint32(18,data.length,true);
+    a.setUint32(22,data.length,true); a.setUint16(26,filename.length,true);
+    b.setUint32(0,0x02014b50,true); b.setUint16(4,20,true); b.setUint16(6,20,true);
+    b.setUint16(14,0x5721,true); b.setUint32(16,crc,true); b.setUint32(20,data.length,true);
+    b.setUint32(24,data.length,true); b.setUint16(28,filename.length,true); b.setUint32(42,offset,true);
+    local.push(entry,filename,data);
+    directory.push(index,filename);
+    offset+=entry.byteLength+filename.length+data.length;
+    size+=index.byteLength+filename.length;
+  }
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,files.length,true); end.setUint16(10,files.length,true);
+  end.setUint32(12,size,true); end.setUint32(16,offset,true);
+  return new Blob([...local,...directory,end.buffer],{type:'application/zip'});
+}
+if(qa) {
+  const requested=Number(query.get('scale'));
+  if(requested>=.5 && requested<=1) quality=requested;
+  id('runQA').addEventListener('click',()=>launchPlayback('benchmark'));
+  id('captureQA').addEventListener('click',()=>launchPlayback('capture'));
+  if(query.get('qa')==='preview') {
+    const poses=[
+      [SPAWN_X,SPAWN_Z,SPAWN_YAW,SPAWN_PITCH,-1],
+      [2.67,2.04,.03,-.34,-1],
+      [SPAWN_X,SPAWN_Z,-.01,.22,-1],
+      [1.65,2.08,-.73,.11,-1],
+      [1.93,4.73,-.052,.145,7.0],
+      [1.93,4.73,-.052,.145,16.7]
+    ];
+    for(let i=0;i<poses.length;i++) {
+      const button=document.createElement('button');
+      button.textContent=String(i+1);
+      button.addEventListener('click',()=>{
+        reset(); resume();
+        [x,z,yaw,pitch,revealTime]=poses[i];
+        time=Math.max(1,revealTime+1);
+      });
+      id('qa').append(button);
+    }
+  }
+}
+boot().catch(error=>fail(error.message));
+</script>
+</body>
+</html>
